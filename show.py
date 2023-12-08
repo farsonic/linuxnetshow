@@ -148,16 +148,15 @@ def show_mac():
     result = subprocess.run(cmd, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     neighbors = json.loads(result.stdout)
 
-    print("{:<22} {:<20} {:<15} {:<15}".format("MAC Address", "Address", "Interface", "Vendor"))
-    print("=" * 90)
+    print("{:<22} {:<20} {:<20} {:<15}".format("MAC Address", "Address", "Interface", "Vendor"))
+    print("=" * 77)
 
     for neighbor in neighbors:
         mac = neighbor.get("lladdr", "N/A")
         address = neighbor.get("dst", "N/A")
         interface = neighbor.get("dev", "N/A")
         vendor = get_oui_vendor(mac) if mac != "N/A" else "N/A"
-        print("{:<22} {:<20} {:<15} {:<15}".format(mac, address, interface, vendor))
-
+        print("{:<22} {:<20} {:<20} {:<15}".format(mac, address, interface, vendor))
 
 
 def main():
@@ -165,7 +164,7 @@ def main():
 
     if 'mac' in args:
         show_mac()
-    elif 'int' in args or 'interface' in args:
+    elif 'interface' in args:
         if len(args) > 1:
             interface = args[1]
             show_interface(interface)
