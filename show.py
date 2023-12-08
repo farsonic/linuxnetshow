@@ -17,7 +17,7 @@ def download_oui_file():
 def get_oui_vendor(mac_address):
     try:
         # Special case for Docker Container MAC addresses
-        if mac_address.lower().startswith("02:42:ac"):
+        if mac_address.lower().startswith("02:42"):
             return "Docker Container"
 
         if not os.path.exists(OUI_FILE_PATH):
@@ -101,8 +101,9 @@ def show_interface(interface):
 
     iface = link_data[0]
     mac = iface.get('address', 'N/A')
+    vendor = get_oui_vendor(mac) if mac != 'N/A' else "Unknown"
     ifindex = iface.get('ifindex', 'N/A')
-    type = iface.get('link_type','N/A')
+    type = iface.get('link_type', 'N/A')
     operstate = iface.get('operstate', 'UNKNOWN').capitalize()
     mtu = iface.get('mtu', 'N/A')
     speed = get_link_speed(interface)
@@ -115,11 +116,10 @@ def show_interface(interface):
     print(f"  Link state: {operstate} since {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"  Speed: {speed}")
     print(f"  MTU: {mtu}")
-    print(f"  MAC Address: {mac}")
+    print(f"  MAC Address:  {mac} ({vendor})")
     print(f"  IPv4 Address: {ipv4}")
     print(f"  IPv6 Address: {ipv6}")
     print("\n")
-
 
 
 def show_all_interfaces():
@@ -149,7 +149,7 @@ def show_mac():
     neighbors = json.loads(result.stdout)
 
     print("{:<22} {:<20} {:<20} {:<15}".format("MAC Address", "Address", "Interface", "Vendor"))
-    print("=" * 77)
+    print("=" * 90)
 
     for neighbor in neighbors:
         mac = neighbor.get("lladdr", "N/A")
