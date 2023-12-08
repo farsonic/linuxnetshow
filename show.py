@@ -16,6 +16,10 @@ def download_oui_file():
 
 def get_oui_vendor(mac_address):
     try:
+        # Special case for Docker Container MAC addresses
+        if mac_address.lower().startswith("02:42:ac"):
+            return "Docker Container"
+
         if not os.path.exists(OUI_FILE_PATH):
             download_oui_file()
 
@@ -23,6 +27,7 @@ def get_oui_vendor(mac_address):
         with open(OUI_FILE_PATH, 'r') as file:
             for line in file:
                 if oui_prefix in line.replace('-', '').upper():
+                    # Extracting only the vendor name
                     parts = line.split('\t')
                     if len(parts) >= 3:
                         return parts[2].strip()
