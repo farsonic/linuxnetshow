@@ -5,7 +5,32 @@ import sys
 from datetime import datetime, timedelta
 import re
 import ipaddress
+import os
 
+OUI_FILE_URL = "https://standards-oui.ieee.org/oui/oui.txt"
+OUI_FILE_PATH = "/var/tmp/oui.txt"
+
+def download_oui_file():
+    if not os.path.exists(OUI_FILE_PATH):
+        os.system(f"wget -O {OUI_FILE_PATH} {OUI_FILE_URL}")
+
+def get_oui_vendor(mac_address):
+    try:
+        if not os.path.exists(OUI_FILE_PATH):
+            download_oui_file()
+
+        oui_prefix = mac_address.replace(':', '').upper()[:6]
+        with open(OUI_FILE_PATH, 'r') as file:
+            for line in file:
+                if oui_prefix in line.replace('-', '').upper():
+                    parts = line.split('\t')
+                    if len(parts) >= 3:
+                        return parts[2].strip()
+        return "Unknown"
+    except Exception as e:
+        print(f"Error fetching OUI data: {e}")
+        return "Unknown"
+    
 def format_speed(speed_str):
     match = re.match(r"(\d+)Mb/s", speed_str)
     if match:
@@ -112,15 +137,37 @@ def show_all_interfaces():
 
         print("{:<18} {:<20} {:<12} {:<8} {:<20} {:<40}".format(interface, mac, operstate, admin_state, ipv4, ipv6))
 
+
+def show_mac():
+    cmd = "ip --json -detail neigh"
+    result = subprocess.run(cmd, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    neighbors = json.loads(result.stdout)
+
+    print("{:<22} {:<20} {:<15} {:<15}".format("MAC Address", "Address", "Interface", "Vendor"))
+    print("=" * 90)
+
+    for neighbor in neighbors:
+        mac = neighbor.get("lladdr", "N/A")
+        address = neighbor.get("dst", "N/A")
+        interface = neighbor.get("dev", "N/A")
+        vendor = get_oui_vendor(mac) if mac != "N/A" else "N/A"
+        print("{:<22} {:<20} {:<15} {:<15}".format(mac, address, interface, vendor))
+
+
+
 def main():
     args = sys.argv[1:]
 
-    if 'int' in args or 'interface' in args:
+    if 'mac' in args:
+        show_mac()
+    elif 'int' in args or 'interface' in args:
         if len(args) > 1:
             interface = args[1]
             show_interface(interface)
         else:
             show_all_interfaces()
+    else:
+        print("Invalid command. Usage: 'show mac' or 'show interface [name]'")
 
 if __name__ == "__main__":
     main()
