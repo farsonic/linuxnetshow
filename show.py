@@ -4,10 +4,20 @@ import json
 import sys
 from datetime import datetime, timedelta
 import re
+import ipaddress
+
+def format_speed(speed_str):
+    match = re.match(r"(\d+)Mb/s", speed_str)
+    if match:
+        speed = int(match.group(1))
+        if speed >= 1000:
+            return f"{speed // 1000}Gb/s"
+        return f"{speed}Mb/s"
+    return speed_str
 
 def get_interface_data(interface=None):
-    link_cmd = f"ip --json link show {interface}" if interface else "ip --json link show"
-    addr_cmd = f"ip --json addr show {interface}" if interface else "ip --json addr show"
+    link_cmd = f"ip --json -details link show {interface}" if interface else "ip --json link show"
+    addr_cmd = f"ip --json -details addr show {interface}" if interface else "ip --json addr show"
 
     link_result = subprocess.run(link_cmd, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     addr_result = subprocess.run(addr_cmd, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -33,6 +43,27 @@ def format_duration(td):
     minutes, seconds = divmod(remainder, 60)
     return f"{int(days)} days, {int(hours)} hours, {int(minutes)} minutes, {int(seconds)} seconds"
 
+def format_ip_address(addr_info):
+    ip_with_prefix = f"{addr_info['local']}/{addr_info['prefixlen']}"
+    subnet = calculate_subnet(ip_with_prefix)
+    if 'broadcast' in addr_info and addr_info['family'] == 'inet':
+        broadcast = addr_info['broadcast']
+    else:
+        broadcast = 'N/A'
+
+    return f"{ip_with_prefix} (subnet: {subnet}, broadcast: {broadcast})"
+
+
+def calculate_subnet(ip_with_prefix):
+    network = ipaddress.ip_network(ip_with_prefix, strict=False)
+    return str(network)
+
+def get_link_speed(interface):
+    cmd = f"ethtool {interface}"
+    result = subprocess.run(cmd, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    match = re.search(r"Speed: (.+)", result.stdout)
+    return format_speed(match.group(1)) if match else 'N/A'
+
 def show_interface(interface):
     link_data, addr_data = get_interface_data(interface)
     if not link_data or not addr_data:
@@ -40,30 +71,26 @@ def show_interface(interface):
 
     iface = link_data[0]
     mac = iface.get('address', 'N/A')
+    ifindex = iface.get('ifindex', 'N/A')
+    type = iface.get('link_type','N/A')
     operstate = iface.get('operstate', 'UNKNOWN').capitalize()
     mtu = iface.get('mtu', 'N/A')
+    speed = get_link_speed(interface)
+    ipv4 = ', '.join([format_ip_address(addr) for addr in addr_data[0]['addr_info'] if addr['family'] == 'inet'])
+    ipv6 = ', '.join([format_ip_address(addr) for addr in addr_data[0]['addr_info'] if addr['family'] == 'inet6'])
 
-    ipv4_addrs = [f"{addr['local']}/{addr['prefixlen']}" for addr in addr_data[0]['addr_info'] if addr['family'] == 'inet']
-    ipv6_addrs = [f"{addr['local']}/{addr['prefixlen']}" for addr in addr_data[0]['addr_info'] if addr['family'] == 'inet6']
+    print(f"Interface: {interface}, Physical Link is {operstate}")
+    print(f"  Interface index {ifindex}")
+    print(f"  Type: {type}")
+    print(f"  Link state: {operstate} since {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  Speed: {speed}")
+    print(f"  MTU: {mtu}")
+    print(f"  MAC Address: {mac}")
+    print(f"  IPv4 Address: {ipv4}")
+    print(f"  IPv6 Address: {ipv6}")
+    print("\n")
 
-    ipv4 = ', '.join(ipv4_addrs) if ipv4_addrs else 'N/A'
-    ipv6 = ', '.join(ipv6_addrs) if ipv6_addrs else 'N/A'
 
-    print(f"Interface {interface} is {operstate}")
-    print(f" Admin state is {operstate}")
-    print(f" Link state: {operstate} for {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f" MAC Address: {mac}")
-    print(f" MTU {mtu}")
-    print(f" IPv4 Address: {ipv4}")
-    print(f" IPv6 Address: {ipv6}")
-
-    last_change = get_last_change_time(interface)
-    if last_change:
-        up_duration = datetime.now() - last_change
-        up_time_str = format_duration(up_duration)
-        print(f" Link has been {iface.get('operstate', 'UNKNOWN')} for {up_time_str}")
-    else:
-        print(" Unable to determine link up time.")
 
 def show_all_interfaces():
     print("{:<18} {:<20} {:<12} {:<8} {:<20} {:<40}".format("Interface", "MAC", "Operstate", "Admin", "IPv4", "IPv6"))
